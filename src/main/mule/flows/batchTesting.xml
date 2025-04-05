@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:validation="http://www.mulesoft.org/schema/mule/validation" xmlns:batch="http://www.mulesoft.org/schema/mule/batch"
+	xmlns:http="http://www.mulesoft.org/schema/mule/http"
+	xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/batch http://www.mulesoft.org/schema/mule/batch/current/mule-batch.xsd
+http://www.mulesoft.org/schema/mule/validation http://www.mulesoft.org/schema/mule/validation/current/mule-validation.xsd">
+	<http:listener-config name="HTTP_Listener_config" doc:name="HTTP Listener config" doc:id="df624295-eb97-46d2-ac1c-5907fcfe0adc" >
+		<http:listener-connection host="0.0.0.0" port="8081" />
+	</http:listener-config>
+	<flow name="batchTestingFlow" doc:id="6f29af66-5fcb-4a4f-a8da-e126b954c292" >
+		<http:listener doc:name="Listener" doc:id="96dd0d63-bad8-4755-b21b-2f186a26ff58" config-ref="HTTP_Listener_config" path="/batchTesting"/>
+		<logger level="INFO" doc:name="Inicio de flujo" doc:id="78fd0cc3-6032-4b76-ac50-b2d3d9f9b5ec" message="Inicio de flujo"/>
+		<set-payload value="#[%dw 2.0&#10;output application/json&#10;---&#10;(1 to 70) as Array]" doc:name="numberList" doc:id="62750c1b-07fa-4f69-9341-2dc5573c882d" />
+		<batch:job jobName="batchTestingBatch_Job" doc:id="cf7716d8-e674-449f-9928-8d2a455a0714" target="batchJobTarget" maxFailedRecords="-1">
+			<batch:process-records >
+				<batch:step name="Batch_Step" doc:id="77907d16-e9a9-4a0d-a11b-b87b4fb9686c" >
+					<set-variable value="#[%dw 2.0&#10;output application/json&#10;---&#10;{&#10;  resultado: (vars.sumNum.resultado default 0) + (payload as Number)&#10;}]" doc:name="sumNum" doc:id="a5387e89-70b1-49dd-bf71-eaaced162370" variableName="sumNum"/>
+					<logger level="INFO" doc:name="Logger" doc:id="1e4cb703-6f24-4872-be77-1040642c3bd5" message='#["First batch step = " ++ payload ++ ". SumNum Var = " ++ vars.sumNum.resultado]'/>
+					<batch:aggregator doc:name="Batch Aggregator" doc:id="76d31a65-1726-4d22-9f84-0b387253061b" size="5">
+						<logger level="INFO" doc:name="Logger" doc:id="f33f421d-423a-4ee5-b794-8298ebc939a7" message='#["Batch Aggregator First Step = " ++ (payload joinBy ", ")]'/>
+					</batch:aggregator>
+				</batch:step>
+				<batch:step name="Batch_Step1" doc:id="0197303e-fca4-4431-a33d-a0d1651b73ce" >
+					<set-variable value="#[%dw 2.0&#10;output application/json&#10;---&#10;{&#10;  resultado: (vars.sumNum.resultado default 0) + (payload as Number)&#10;}]" doc:name="sumNum" doc:id="9781d016-5f7c-40fd-b365-5173e26af946" variableName="sumNum" />
+					<logger level="INFO" doc:name="Logger" doc:id="dcb20ec2-d143-4e3a-a357-15dec49bda21" message='#["Second batch step = " ++ payload ++ ". SumNum Var = " ++ vars.sumNum.resultado]' />
+					<choice doc:name="Choice" doc:id="07dfeff9-758c-4ca4-bffd-d27d12479f0f" >
+						<when expression="#[(payload mod 5) == 0]">
+							<logger level="INFO" doc:name="Logger" doc:id="bb965e80-9e73-4c2c-9386-05830535bf48" message='#["Second batch step (divisible entre 5) = " ++ payload]' />
+							<set-variable value="#['El número es divisible entre 5. Número = ' ++ payload]" doc:name="errorDescription" doc:id="658a1b3d-13a2-454a-9966-c4f7a56e2938" variableName="errorDescription"/>
+							<try doc:name="Try" doc:id="8ead81f7-3976-434c-9466-ddf5a6880a56" >
+								<raise-error doc:name="Raise error" doc:id="a1f0a24d-40c6-43f7-b787-00ce5fed32ce" type="CUSTOM:DIVISIBLE_ENTRE_5" description="#[vars.errorDescription]" />
+								<error-handler >
+									<on-error-continue enableNotifications="true" logException="true" doc:name="On Error Continue" doc:id="22a04c6c-df88-4c9e-9b1d-0484813cb00c" type="CUSTOM:DIVISIBLE_ENTRE_5">
+										<logger level="INFO" doc:name="Logger" doc:id="f2eb4c7b-9620-4c8b-a6a7-7546186d00db" message='#[{&#10;	&#10;	"errorDescription": vars.errorDescription,&#10;	"postProcessing": "El flujo continuará normalemente. Exception capturada"&#10;}]'/>
+									</on-error-continue>
+								</error-handler>
+							</try>
+						</when>
+					</choice>
+					<batch:aggregator doc:name="Batch Aggregator" doc:id="71f625c7-779f-4b63-94af-153756983d43" size="6">
+						<logger level="INFO" doc:name="Logger" doc:id="6180cf00-6ec4-4d7b-9ea1-fad43776bbf0" message='#["Batch Aggregator Second Step = " ++ (payload joinBy ", ")]'/>
+					</batch:aggregator>
+				</batch:step>
+			</batch:process-records>
+			<batch:on-complete >
+				<logger level="INFO" doc:name="Logger" doc:id="7664f8e1-1f3b-4440-8ba2-73f7301f3fec" message='#[%dw 2.0&#10;output application/json&#10;---&#10;{&#10;  mensaje: "Batch finalizado",&#10;  totalRegistros: payload.totalRecords,&#10;  procesados: payload.processedRecords,&#10;  exitosos: payload.successfulRecords,&#10;  fallidos: payload.failedRecords,&#10;  tiempoEjecucionMs: payload.elapsedTimeInMillis,&#10;  idInstancia: payload.batchJobInstanceId,&#10;  pasos: payload.batchStepResults mapObject (valor, clave) -&gt; {&#10;    (clave): {&#10;      recibidos: valor.receivedRecords,&#10;      exitosos: valor.successfulRecords,&#10;      fallidos: valor.failedRecords,&#10;      errores: valor.exceptionSummary.exceptionsCount&#10;    }&#10;  }&#10;}]'/>
+			</batch:on-complete>
+		</batch:job>
+		<logger level="INFO" doc:name="Final de flujo" doc:id="5dd7e831-7d41-466a-b160-f941206dce78" message="Final de flujo" />
+		<error-handler >
+			<on-error-continue enableNotifications="true" logException="true" doc:name="On Error Continue" doc:id="c5bd2b34-0aff-4391-a08e-6c2f63f2638f" type="CUSTOM:DIVISIBLE_ENTRE_5">
+				<logger level="INFO" doc:name="Logger" doc:id="53becf21-1c77-42ba-bbcf-e9f4270e8e70" message="#[error]"/>
+			</on-error-continue>
+		</error-handler>
+	</flow>
+	<error-handler name="batchTestingError_Handler" doc:id="a7fb5dfb-a71d-46b8-8b25-5d4136ecefb8" >
+		<on-error-continue enableNotifications="true" logException="true" doc:name="On Error Continue" doc:id="ff0d137d-a495-46ae-84b7-d0bbfa5ab44e" type="ANY">
+			<logger level="INFO" doc:name="Logger" doc:id="742a4683-4cb8-4ea2-b61e-19d00aa5e29e" message="Error recibido"/>
+		</on-error-continue>
+	</error-handler>
+</mule>
